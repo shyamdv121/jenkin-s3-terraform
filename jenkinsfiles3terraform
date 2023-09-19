@@ -23,7 +23,8 @@ pipeline {
 
         stage('terraform intallation') {
              steps {
-              sh '#!/bin/bash
+              sh " 
+               #!/bin/bash
                # Check if Terraform is already installed
                if command -v terraform &>/dev/null; then
                echo "Terraform is already installed."
@@ -55,7 +56,7 @@ pipeline {
 
             chmod +x install_terraform.sh
 
-            sudo ./install_terraform.sh'
+            sudo ./install_terraform.sh "
 
 
         stage('Plan') {
