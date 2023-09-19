@@ -1,0 +1,91 @@
+pipeline {
+
+    parameters {
+        booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
+    } 
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+    }
+
+   agent  any
+    stages {
+        stage('checkout') {
+            steps {
+                 script{
+                        dir("terraform")
+                        {
+                            git "https://github.com/shyamdv121/jenkin-s3-terraform.git"
+                        }
+                    }
+                }
+            }
+
+        stage('terraform intallation') {
+             steps {
+               #!/bin/bash
+               # Check if Terraform is already installed
+               if command -v terraform &>/dev/null; then
+               echo "Terraform is already installed."
+               exit 0
+               fi
+
+              # Add HashiCorp's GPG key
+              sudo rpm --import https://keybase.io/hashicorp/pgp_keys.asc
+              # Add the HashiCorp Terraform repository
+              sudo tee /etc/yum.repos.d/hashicorp.repo <<EOF
+              [hashicorp]
+              name=Hashicorp Stable - $basearch
+              baseurl=https://rpm.releases.hashicorp.com/RHEL/7/$basearch/stable
+              enabled=1
+              gpgcheck=1
+              gpgkey=https://keybase.io/hashicorp/pgp_keys.asc
+              EOF
+
+             # Update the package index and install Terraform
+             sudo yum update -y
+             sudo yum install terraform -y
+
+             # Verify the installation
+             if command -v terraform &>/dev/null; then
+            echo "Terraform has been installed successfully."
+        else
+             echo "Terraform installation failed. Please check for errors."
+      fi
+
+            chmod +x install_terraform.sh
+
+            sudo ./install_terraform.sh
+
+
+        stage('Plan') {
+            steps {
+                sh 'pwd;cd terraform/ ; terraform init'
+                sh "pwd;cd terraform/ ; terraform plan -out tfplan"
+                sh 'pwd;cd terraform/ ; terraform show -no-color tfplan > tfplan.txt'
+            }
+        }
+        stage('Approval') {
+           when {
+               not {
+                   equals expected: true, actual: params.autoApprove
+               }
+           }
+
+           steps {
+               script {
+                    def plan = readFile 'terraform/tfplan.txt'
+                    input message: "Do you want to apply the plan?",
+                    parameters: [text(name: 'Plan', description: 'Please review the plan', defaultValue: plan)]
+               }
+           }
+       }
+
+        stage('Apply') {
+            steps {
+                sh "pwd;cd terraform/ ; terraform apply -input=false tfplan"
+            }
+        }
+    }
+
+  }
